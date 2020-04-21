@@ -15,9 +15,9 @@
 #include <unordered_set>
 
 // should be called once, at process startup
-void LaunchInfo::initializeProcess(int argc, const char * const *argv)
+void LaunchInfo::initialize(int argc, const char * const *argv)
 {
-	return getInstance()._initializeProcess(argc, argv);
+	return getInstance()._initialize(argc, argv);
 }
 
 LaunchInfo::pid_type LaunchInfo::getParentPID()
@@ -496,8 +496,9 @@ std::vector<LaunchInfo::ProcessDetails> GetCurrentProcessParentDetails()
 #endif
 
 
-void LaunchInfo::_initializeProcess(int argc, const char * const *argv)
+void LaunchInfo::_initialize(int argc, const char * const *argv)
 {
+	if (initialized) return;
 	parentProcesses = GetCurrentProcessParentDetails();
 	if (parentProcesses.empty())
 	{
@@ -507,4 +508,5 @@ void LaunchInfo::_initializeProcess(int argc, const char * const *argv)
 		unknownParent.imageFileName = "<unknown>";
 		parentProcesses.push_back(unknownParent);
 	}
+	initialized = true;
 }

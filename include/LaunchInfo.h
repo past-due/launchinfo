@@ -50,7 +50,7 @@ public:
 public:
 
 	// should be called once, at process startup
-	static void initializeProcess(int argc, const char * const *argv);
+	static void initialize(int argc, const char * const *argv);
 
 	static pid_type getParentPID();
 	static const std::string& getParentImageName();
@@ -58,8 +58,9 @@ public:
 
 private:
 	static LaunchInfo& getInstance();
-	void _initializeProcess(int argc, const char * const *argv);
+	void _initialize(int argc, const char * const *argv);
 private:
+	bool initialized = false;
 	std::vector<ProcessDetails> parentProcesses = {ProcessDetails(0, "<not initialized>")};
 };
 
