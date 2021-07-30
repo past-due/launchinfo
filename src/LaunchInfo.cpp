@@ -11,7 +11,6 @@
 //
 
 #include "LaunchInfo.h"
-
 #include <unordered_set>
 
 // should be called once, at process startup
@@ -26,7 +25,7 @@ LaunchInfo::pid_type LaunchInfo::getParentPID()
 	return parents.front().pid;
 }
 
-const std::string& LaunchInfo::getParentImageName()
+const LaunchInfo::ImagePath& LaunchInfo::getParentImageName()
 {
 	const auto& parents = getInstance().parentProcesses;
 	return parents.front().imageFileName;
@@ -42,6 +41,25 @@ LaunchInfo& LaunchInfo::getInstance()
 	static LaunchInfo info;
 	return info;
 }
+
+#if defined(_WIN32)
+LaunchInfo::ImagePath ImagePathFromPathString(const std::string& pathStr)
+{
+	auto lastSlashPos = pathStr.rfind('\\');
+	return LaunchInfo::ImagePath(pathStr, lastSlashPos);
+}
+LaunchInfo::ImagePath ImagePathFromPathString(std::string&& pathStr)
+{
+	auto lastSlashPos = pathStr.rfind('\\');
+	return LaunchInfo::ImagePath(pathStr, lastSlashPos);
+}
+#else
+LaunchInfo::ImagePath ImagePathFromPathString(std::string&& pathStr)
+{
+	auto lastSlashPos = pathStr.rfind('/');
+	return LaunchInfo::ImagePath(pathStr, lastSlashPos);
+}
+#endif
 
 #if defined(_WIN32)
 # define WIN32_LEAN_AND_MEAN
@@ -177,7 +195,7 @@ std::vector<LaunchInfo::ProcessDetails> GetParentProcessDetails(DWORD pid)
 	{
 		LaunchInfo::ProcessDetails parentProcess;
 		parentProcess.pid = parentProcessInfo.pid;
-		parentProcess.imageFileName = parentProcessInfo.szExeFile; // default to parentProcessInfo.szExeFile
+		parentProcess.imageFileName = ImagePathFromPathString(parentProcessInfo.szExeFile); // default to parentProcessInfo.szExeFile
 
 		HANDLE hParent = OpenProcess( PROCESS_QUERY_LIMITED_INFORMATION, FALSE, parentProcessInfo.pid );
 		if ( hParent == NULL )
@@ -206,7 +224,7 @@ std::vector<LaunchInfo::ProcessDetails> GetParentProcessDetails(DWORD pid)
 						CloseHandle(hParent);
 						// clear any parent process data - store that this child was orphaned
 						parentProcess.pid = 0;
-						parentProcess.imageFileName = "<process orphaned>";
+						parentProcess.imageFileName = LaunchInfo::ImagePath("<process orphaned>", std::string::npos);
 						parentProcesses.push_back(parentProcess);
 						// stop looking at parents
 						return parentProcesses;
@@ -302,7 +320,7 @@ std::vector<LaunchInfo::ProcessDetails> GetParentProcessDetails(DWORD pid)
 		}
 
 		CloseHandle(hParent);
-		parentProcess.imageFileName = std::string(utf8Buffer.data(), utf8Len - 1);
+		parentProcess.imageFileName = ImagePathFromPathString(std::string(utf8Buffer.data(), utf8Len - 1));
 
 		parentProcesses.push_back(parentProcess);
 		childPID = parentProcess.pid;
@@ -311,7 +329,7 @@ std::vector<LaunchInfo::ProcessDetails> GetParentProcessDetails(DWORD pid)
 	return parentProcesses;
 }
 
-std::vector<LaunchInfo::ProcessDetails> GetCurrentProcessParentDetails()
+std::vector<LaunchInfo::ProcessDetails> GetCurrentProcess_ParentDetails()
 {
 	return GetParentProcessDetails(GetCurrentProcessId());
 }
@@ -357,7 +375,7 @@ pid_t GetParentProcessIDForProcessID(pid_t pid)
     return info.kp_eproc.e_ppid;
 }
 
-std::vector<LaunchInfo::ProcessDetails> GetCurrentProcessParentDetails()
+std::vector<LaunchInfo::ProcessDetails> GetCurrentProcess_ParentDetails()
 {
 	std::vector<LaunchInfo::ProcessDetails> parentProcesses;
 	std::unordered_set<pid_t> visitedPIDs;
@@ -366,7 +384,7 @@ std::vector<LaunchInfo::ProcessDetails> GetCurrentProcessParentDetails()
 	parentProcess.pid = getppid();
 	while (parentProcess.pid != 0 && visitedPIDs.count(parentProcess.pid) == 0)
 	{
-		parentProcess.imageFileName = GetPathFromProcessID(parentProcess.pid);
+		parentProcess.imageFileName = ImagePathFromPathString(GetPathFromProcessID(parentProcess.pid));
 		parentProcesses.push_back(parentProcess);
 		visitedPIDs.insert(parentProcess.pid);
 		parentProcess.pid = GetParentProcessIDForProcessID(parentProcess.pid);
@@ -464,7 +482,7 @@ pid_t GetParentProcessIDForProcessID(pid_t pid)
 	}
 }
 
-std::vector<LaunchInfo::ProcessDetails> GetCurrentProcessParentDetails()
+std::vector<LaunchInfo::ProcessDetails> GetCurrentProcess_ParentDetails()
 {
 	std::vector<LaunchInfo::ProcessDetails> parentProcesses;
 	std::unordered_set<pid_t> visitedPIDs;
@@ -473,7 +491,7 @@ std::vector<LaunchInfo::ProcessDetails> GetCurrentProcessParentDetails()
 	parentProcess.pid = getppid();
 	while (parentProcess.pid != 0 && visitedPIDs.count(parentProcess.pid) == 0)
 	{
-		parentProcess.imageFileName = GetProcessNameFromPID(parentProcess.pid);
+		parentProcess.imageFileName = ImagePathFromPathString(GetProcessNameFromPID(parentProcess.pid));
 		parentProcesses.push_back(parentProcess);
 		visitedPIDs.insert(parentProcess.pid);
 		parentProcess.pid = GetParentProcessIDForProcessID(parentProcess.pid);
@@ -486,7 +504,7 @@ std::vector<LaunchInfo::ProcessDetails> GetCurrentProcessParentDetails()
 
 // Not yet implemented
 
-std::vector<LaunchInfo::ProcessDetails> GetCurrentProcessParentDetails()
+std::vector<LaunchInfo::ProcessDetails> GetCurrentProcess_ParentDetails()
 {
 	std::vector<LaunchInfo::ProcessDetails> parentProcesses;
 	// not yet implemented
@@ -499,13 +517,13 @@ std::vector<LaunchInfo::ProcessDetails> GetCurrentProcessParentDetails()
 void LaunchInfo::_initialize(int argc, const char * const *argv)
 {
 	if (initialized) return;
-	parentProcesses = GetCurrentProcessParentDetails();
+	parentProcesses = GetCurrentProcess_ParentDetails();
 	if (parentProcesses.empty())
 	{
 		// ensure there's always at least one entry
 		LaunchInfo::ProcessDetails unknownParent;
 		unknownParent.pid = 0;
-		unknownParent.imageFileName = "<unknown>";
+		unknownParent.imageFileName = LaunchInfo::ImagePath("<unknown>", std::string::npos);
 		parentProcesses.push_back(unknownParent);
 	}
 	initialized = true;
