@@ -39,12 +39,38 @@ public:
 	typedef int pid_type;
 #endif
 
+	class ImagePath
+	{
+	public:
+		ImagePath() { }
+		ImagePath(const std::string& fullPath, size_t dirnameLength)
+		: m_fullPath(fullPath)
+		, m_dirnameLength(dirnameLength)
+		{ }
+		ImagePath(std::string&& fullPath, size_t dirnameLength)
+		: m_fullPath(fullPath)
+		, m_dirnameLength(dirnameLength)
+		{ }
+
+	public:
+		inline const std::string& fullPath() const { return m_fullPath; }
+		inline std::string dirname() const { return (m_dirnameLength != std::string::npos) ? m_fullPath.substr(0, m_dirnameLength) : ""; }
+		inline std::string basename() const { return (m_dirnameLength != std::string::npos) ? m_fullPath.substr(m_dirnameLength + 1) : m_fullPath; }
+
+	private:
+		std::string m_fullPath;
+		size_t m_dirnameLength = std::string::npos;
+	};
+
 	struct ProcessDetails
 	{
 		ProcessDetails() {}
-		ProcessDetails(pid_type pid, const std::string imageFileName) { }
+		ProcessDetails(pid_type pid, LaunchInfo::ImagePath&& imageFileName)
+		: pid(pid)
+		, imageFileName(std::move(imageFileName))
+		{ }
 		pid_type pid = 0;
-		std::string imageFileName;
+		LaunchInfo::ImagePath imageFileName;
 	};
 
 public:
@@ -53,7 +79,7 @@ public:
 	static void initialize(int argc, const char * const *argv);
 
 	static pid_type getParentPID();
-	static const std::string& getParentImageName();
+	static const ImagePath& getParentImageName();
 	static const std::vector<ProcessDetails>& getAncestorProcesses();
 
 private:
@@ -61,7 +87,7 @@ private:
 	void _initialize(int argc, const char * const *argv);
 private:
 	bool initialized = false;
-	std::vector<ProcessDetails> parentProcesses = {ProcessDetails(0, "<not initialized>")};
+	std::vector<ProcessDetails> parentProcesses = {ProcessDetails(0, ImagePath("<not initialized>", std::string::npos))};
 };
 
 #endif // __INCLUDED_LAUNCH_INFO_H__
