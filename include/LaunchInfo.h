@@ -78,6 +78,7 @@ public:
 	// should be called once, at process startup
 	static void initialize(int argc, const char * const *argv);
 
+	static const ProcessDetails& getCurrentProcessDetails();
 	static pid_type getParentPID();
 	static const ImagePath& getParentImageName();
 	static const std::vector<ProcessDetails>& getAncestorProcesses();
@@ -87,6 +88,7 @@ private:
 	void _initialize(int argc, const char * const *argv);
 private:
 	bool initialized = false;
+	ProcessDetails currentProcess = {ProcessDetails(0, ImagePath("<not initialized>", std::string::npos))};
 	std::vector<ProcessDetails> parentProcesses = {ProcessDetails(0, ImagePath("<not initialized>", std::string::npos))};
 };
 

@@ -13,10 +13,17 @@
 #include "LaunchInfo.h"
 #include <unordered_set>
 
+#include "../3rdparty/whereami/whereami.h"
+
 // should be called once, at process startup
 void LaunchInfo::initialize(int argc, const char * const *argv)
 {
 	return getInstance()._initialize(argc, argv);
+}
+
+const LaunchInfo::ProcessDetails& LaunchInfo::getCurrentProcessDetails()
+{
+	return getInstance().currentProcess;
 }
 
 LaunchInfo::pid_type LaunchInfo::getParentPID()
@@ -60,6 +67,23 @@ LaunchInfo::ImagePath ImagePathFromPathString(std::string&& pathStr)
 	return LaunchInfo::ImagePath(pathStr, lastSlashPos);
 }
 #endif
+
+bool GetCurrentProcessPath(LaunchInfo::ImagePath& output)
+{
+	int dirnameLength = -1;
+	int length = ::WAI_PREFIX(getExecutablePath)(NULL, 0, NULL);
+	if (length < 0)
+	{
+		return false;
+	}
+	std::vector<char> utf8Buffer(length + 1, '\0');
+	if (::WAI_PREFIX(getExecutablePath)(&utf8Buffer[0], length, &dirnameLength) != length)
+	{
+		return false;
+	}
+	output = LaunchInfo::ImagePath(std::string(utf8Buffer.data(), length), dirnameLength);
+	return true;
+}
 
 #if defined(_WIN32)
 # define WIN32_LEAN_AND_MEAN
@@ -329,6 +353,11 @@ std::vector<LaunchInfo::ProcessDetails> GetParentProcessDetails(DWORD pid)
 	return parentProcesses;
 }
 
+LaunchInfo::pid_type GetCurrentProcess_PID()
+{
+	return GetCurrentProcessId();
+}
+
 std::vector<LaunchInfo::ProcessDetails> GetCurrentProcess_ParentDetails()
 {
 	return GetParentProcessDetails(GetCurrentProcessId());
@@ -373,6 +402,11 @@ pid_t GetParentProcessIDForProcessID(pid_t pid)
         return 0;
 	}
     return info.kp_eproc.e_ppid;
+}
+
+LaunchInfo::pid_type GetCurrentProcess_PID()
+{
+	return getpid();
 }
 
 std::vector<LaunchInfo::ProcessDetails> GetCurrentProcess_ParentDetails()
@@ -482,6 +516,11 @@ pid_t GetParentProcessIDForProcessID(pid_t pid)
 	}
 }
 
+LaunchInfo::pid_type GetCurrentProcess_PID()
+{
+	return getpid();
+}
+
 std::vector<LaunchInfo::ProcessDetails> GetCurrentProcess_ParentDetails()
 {
 	std::vector<LaunchInfo::ProcessDetails> parentProcesses;
@@ -504,6 +543,12 @@ std::vector<LaunchInfo::ProcessDetails> GetCurrentProcess_ParentDetails()
 
 // Not yet implemented
 
+LaunchInfo::pid_type GetCurrentProcess_PID()
+{
+	// not yet implemented
+	return 0;
+}
+
 std::vector<LaunchInfo::ProcessDetails> GetCurrentProcess_ParentDetails()
 {
 	std::vector<LaunchInfo::ProcessDetails> parentProcesses;
@@ -513,10 +558,20 @@ std::vector<LaunchInfo::ProcessDetails> GetCurrentProcess_ParentDetails()
 
 #endif
 
+bool GetCurrentProcessDetails(LaunchInfo::ProcessDetails& output)
+{
+	output.pid = GetCurrentProcess_PID();
+	if (!GetCurrentProcessPath(output.imageFileName))
+	{
+		return false;
+	}
+	return true;
+}
 
 void LaunchInfo::_initialize(int argc, const char * const *argv)
 {
 	if (initialized) return;
+	GetCurrentProcessDetails(currentProcess);
 	parentProcesses = GetCurrentProcess_ParentDetails();
 	if (parentProcesses.empty())
 	{
