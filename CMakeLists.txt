@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.5)
+cmake_minimum_required (VERSION 3.5...3.31)
 project (launchinfo C CXX)
 
 file(GLOB HEADERS "include/LaunchInfo.h")
